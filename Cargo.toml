@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "kernel-layer",
+    "kernel-layer-common",
+    "kernel-layer-ebpf",
+]
+default-members = ["kernel-layer", "kernel-layer-common"]
+
+[workspace.package]
+license = "GPL-2.0-only"
+edition = "2021"
+
+[workspace.dependencies]
+aya = { version = "0.13", default-features = false, features = ["async_tokio"] }
+aya-build = { version = "0.1", default-features = false }
+aya-ebpf = { version = "0.1", default-features = false }
+aya-log = { version = "0.2", default-features = false }
+aya-log-ebpf = { version = "0.1", default-features = false }
+
+anyhow = { version = "1", default-features = false, features = ["std"] }
+tokio = { version = "1", default-features = false }
+log = { version = "0.4", default-features = false }
+env_logger = { version = "0.11", default-features = false }
+
+[profile.release.package.kernel-layer-ebpf]
+debug = 2
+codegen-units = 1

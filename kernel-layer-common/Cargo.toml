@@ -1,0 +1,16 @@
+[package]
+name = "kernel-layer-common"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# This crate must compile for both native (user-space) and bpf-unknown-none (kernel).
+# Keep it #![no_std] compatible and avoid std-only types.
+
+[lib]
+name = "kernel_layer_common"
+path = "src/lib.rs"
+
+[features]
+default = []
+user = []

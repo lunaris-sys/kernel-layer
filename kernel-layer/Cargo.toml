@@ -1,0 +1,21 @@
+[package]
+name = "kernel-layer"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kernel-layer"
+path = "src/main.rs"
+
+[build-dependencies]
+aya-build.workspace = true
+
+[dependencies]
+aya.workspace = true
+aya-log.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+tokio = { workspace = true, features = ["full"] }
+kernel-layer-common = { path = "../kernel-layer-common", features = ["user"] }

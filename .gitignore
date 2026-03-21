@@ -1,0 +1,16 @@
+# Rust build artifacts
+target/
+
+# eBPF compiled objects
+*.o
+*.bpf.o
+
+# Generated BTF skeleton files
+*.skel.rs
+
+# VM artifacts (never commit these)
+*.qcow2
+*.iso
+
+# Local test scripts
+test-local.sh
