@@ -93,4 +93,4 @@ The normalizer tests cover protobuf encoding, path filtering, path extraction fr
 
 ## Part of
 
-[Lunaris](https://github.com/lunaris-sys) — a Linux desktop OS built around a system-wide knowledge graph.
+[Lunaris](https://github.com/lunaris-sys): a Linux desktop OS built around a system-wide knowledge graph.
