@@ -396,6 +396,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
+ "tempfile",
  "tokio",
  "uuid",
 ]

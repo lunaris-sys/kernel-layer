@@ -67,3 +67,5 @@ async fn main() -> Result<()> {
     info!("shutting down");
     Ok(())
 }
+#[cfg(test)]
+mod normalizer_tests;
