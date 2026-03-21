@@ -41,7 +41,7 @@ fn try_file_opened(ctx: TracePointContext) -> Result<(), i64> {
     //   +24: flags (int)
     //   +32: mode (umode_t)
     let filename_ptr = unsafe {
-        ctx.read_at::<u64>(24).map_err(|_| -1i64)? as *const u8
+        ctx.read_at::<u64>(16).map_err(|_| -1i64)? as *const u8
     };
 
     let uid_gid = unsafe { bpf_get_current_uid_gid() };

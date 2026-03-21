@@ -12,9 +12,7 @@ use aya::{
     programs::TracePoint,
 };
 use aya_log::EbpfLogger;
-use kernel_layer_common::FileOpenedEvent;
-use log::{debug, info, warn};
-use std::ffi::CStr;
+use log::{info, warn};
 use tokio::signal;
 
 mod normalizer;
@@ -28,24 +26,24 @@ async fn main() -> Result<()> {
     let producer_socket = std::env::var("LUNARIS_PRODUCER_SOCKET")
         .unwrap_or_else(|_| DEFAULT_PRODUCER_SOCKET.to_string());
 
-    info!("starting kernel-layer daemon");
+    // Read or generate session ID.
+    let session_id = std::env::var("LUNARIS_SESSION_ID")
+        .unwrap_or_else(|_| uuid::Uuid::now_v7().to_string());
 
-    // Load the eBPF program embedded at build time by aya-build.
-    // include_bytes_aligned! ensures the bytes are aligned for eBPF loading.
+    info!("starting kernel-layer daemon");
+    info!("session_id={session_id}");
+
     let ebpf_owned = Box::leak(Box::new(Ebpf::load(aya::include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/kernel-layer-ebpf"
     ))
     .context("failed to load eBPF program")?));
-    let ebpf: &'static mut _ = ebpf_owned;
-    #[allow(unused_mut)]
-    let mut ebpf = ebpf;
 
-    // Initialize eBPF logger so debug!() calls in the eBPF program appear here.
-    if let Err(e) = EbpfLogger::init(&mut ebpf) {
+    let ebpf: &'static mut _ = ebpf_owned;
+
+    if let Err(e) = EbpfLogger::init(ebpf) {
         warn!("eBPF logger init failed (non-fatal): {e}");
     }
 
-    // Attach the tracepoint to sys_enter_openat.
     let program: &mut TracePoint = ebpf
         .program_mut("file_opened")
         .context("program 'file_opened' not found")?
@@ -57,17 +55,15 @@ async fn main() -> Result<()> {
 
     info!("eBPF tracepoint attached to sys_enter_openat");
 
-    // Get a handle to the ring buffer map.
     let ring_buf = RingBuf::try_from(ebpf.map_mut("EVENTS").context("EVENTS map not found")?)?;
 
-    // Spawn the normalizer that reads from the ring buffer and forwards to Event Bus.
-    let normalizer_handle =
-        tokio::task::spawn_blocking(move || normalizer::run(ring_buf, &producer_socket));
+    let producer_socket_clone = producer_socket.clone();
+    let session_id_clone = session_id.clone();
+    tokio::task::spawn_blocking(move || {
+        normalizer::run(ring_buf, &producer_socket_clone, &session_id_clone)
+    });
 
-    // Wait for Ctrl-C.
     signal::ctrl_c().await?;
     info!("shutting down");
-
-    drop(normalizer_handle);
     Ok(())
 }
