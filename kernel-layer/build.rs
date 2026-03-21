@@ -1,13 +1,7 @@
-use aya_build::cargo_metadata;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // aya-build compiles the eBPF crate and embeds the resulting object file
-    // into the user-space binary. At runtime we load it with Ebpf::load().
-    let metadata = cargo_metadata()?;
-    aya_build::build_ebpf(
-        &metadata,
-        &["kernel-layer-ebpf"],
-        &aya_build::BuildOptions::default(),
-    )?;
-    Ok(())
+fn main() {
+    // aya-build 0.1.3 has a bug where it fails when the package name matches
+    // the binary name. We skip it and reference the eBPF binary directly.
+    // The eBPF binary must be built separately with:
+    //   cargo +nightly build -Z build-std=core --target bpfel-unknown-none -p kernel-layer-ebpf --release
+    println!("cargo:rerun-if-changed=../kernel-layer-ebpf/src/main.rs");
 }

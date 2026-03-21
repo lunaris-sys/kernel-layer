@@ -32,10 +32,13 @@ async fn main() -> Result<()> {
 
     // Load the eBPF program embedded at build time by aya-build.
     // include_bytes_aligned! ensures the bytes are aligned for eBPF loading.
-    let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(
+    let ebpf_owned = Box::leak(Box::new(Ebpf::load(aya::include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/kernel-layer-ebpf"
     ))
-    .context("failed to load eBPF program")?;
+    .context("failed to load eBPF program")?));
+    let ebpf: &'static mut _ = ebpf_owned;
+    #[allow(unused_mut)]
+    let mut ebpf = ebpf;
 
     // Initialize eBPF logger so debug!() calls in the eBPF program appear here.
     if let Err(e) = EbpfLogger::init(&mut ebpf) {
