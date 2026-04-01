@@ -44,23 +44,65 @@ async fn main() -> Result<()> {
         warn!("eBPF logger init failed (non-fatal): {e}");
     }
 
-    let program: &mut TracePoint = ebpf
-        .program_mut("file_opened")
-        .context("program 'file_opened' not found")?
-        .try_into()?;
-    program.load()?;
-    program
-        .attach("syscalls", "sys_enter_openat")
-        .context("failed to attach tracepoint to sys_enter_openat")?;
+    // Load and attach all programs first (before taking map references).
+    {
+        let prog: &mut TracePoint = ebpf
+            .program_mut("file_opened")
+            .context("program 'file_opened' not found")?
+            .try_into()?;
+        prog.load()?;
+        prog.attach("syscalls", "sys_enter_openat")
+            .context("failed to attach to sys_enter_openat")?;
+        info!("eBPF tracepoint attached to sys_enter_openat");
+    }
+    {
+        let prog: &mut TracePoint = ebpf
+            .program_mut("process_exec")
+            .context("program 'process_exec' not found")?
+            .try_into()?;
+        prog.load()?;
+        prog.attach("sched", "sched_process_exec")
+            .context("failed to attach to sched_process_exec")?;
+        info!("eBPF tracepoint attached to sched_process_exec");
+    }
+    {
+        let prog: &mut TracePoint = ebpf
+            .program_mut("file_written")
+            .context("program 'file_written' not found")?
+            .try_into()?;
+        prog.load()?;
+        prog.attach("syscalls", "sys_enter_write")
+            .context("failed to attach to sys_enter_write")?;
+        info!("eBPF tracepoint attached to sys_enter_write");
+    }
+    {
+        let prog: &mut TracePoint = ebpf
+            .program_mut("net_state_change")
+            .context("program 'net_state_change' not found")?
+            .try_into()?;
+        prog.load()?;
+        prog.attach("sock", "inet_sock_set_state")
+            .context("failed to attach to inet_sock_set_state")?;
+        info!("eBPF tracepoint attached to inet_sock_set_state");
+    }
 
-    info!("eBPF tracepoint attached to sys_enter_openat");
-
-    let ring_buf = RingBuf::try_from(ebpf.map_mut("EVENTS").context("EVENTS map not found")?)?;
+    // Take ownership of maps (avoids multiple mutable borrows of ebpf).
+    let ring_buf = RingBuf::try_from(ebpf.take_map("EVENTS").context("EVENTS map not found")?)?;
+    let ring_buf_exec = RingBuf::try_from(ebpf.take_map("EXEC_EVENTS").context("EXEC_EVENTS map not found")?)?;
+    let ring_buf_write = RingBuf::try_from(ebpf.take_map("WRITE_EVENTS").context("WRITE_EVENTS map not found")?)?;
+    let ring_buf_net = RingBuf::try_from(ebpf.take_map("NET_EVENTS").context("NET_EVENTS map not found")?)?;
 
     let producer_socket_clone = producer_socket.clone();
     let session_id_clone = session_id.clone();
     tokio::task::spawn_blocking(move || {
-        normalizer::run(ring_buf, &producer_socket_clone, &session_id_clone)
+        normalizer::run(
+            ring_buf,
+            ring_buf_exec,
+            ring_buf_write,
+            ring_buf_net,
+            &producer_socket_clone,
+            &session_id_clone,
+        )
     });
 
     signal::ctrl_c().await?;

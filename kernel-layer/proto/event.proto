@@ -22,6 +22,13 @@ message FileOpenedPayload {
   uint32 flags     = 3;  // openat() flags (O_RDONLY, O_WRONLY, etc.)
 }
 
+// Emitted when a file is written to by any process.
+message FileWrittenPayload {
+  string path      = 1;  // resolved from /proc/pid/fd/N
+  string app_id    = 2;  // application identifier
+  uint64 bytes     = 3;  // number of bytes written
+}
+
 // Emitted when keyboard focus changes between Wayland surfaces.
 message WindowFocusedPayload {
   string app_id      = 1;
