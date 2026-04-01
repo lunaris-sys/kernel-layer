@@ -96,7 +96,17 @@ pub fn run(mut ring_buf: RingBuf<&'static mut aya::maps::MapData>, producer_sock
 }
 
 /// Encode a FileOpenedEvent as a length-prefixed protobuf Event message.
+///
+/// The payload field contains an encoded `FileOpenedPayload` protobuf so that
+/// downstream consumers (knowledge promotion) can decode it with
+/// `FileOpenedPayload::decode(payload)`.
 fn encode_event(event: &FileOpenedEvent, path: &str, session_id: &str) -> Option<Vec<u8>> {
+    let file_payload = proto::FileOpenedPayload {
+        path: path.to_string(),
+        app_id: format!("ebpf:{}", event.pid),
+        flags: 0,
+    };
+
     let proto_event = proto::Event {
         id: Uuid::now_v7().to_string(),
         r#type: "file.opened".to_string(),
@@ -104,9 +114,7 @@ fn encode_event(event: &FileOpenedEvent, path: &str, session_id: &str) -> Option
         source: "ebpf".to_string(),
         pid: event.pid,
         session_id: session_id.to_string(),
-        // Payload: path as raw bytes for Phase 2A.
-        // Phase 2B will use a typed FileOpenedPayload protobuf message.
-        payload: path.as_bytes().to_vec(),
+        payload: file_payload.encode_to_vec(),
     };
 
     let encoded = proto_event.encode_to_vec();

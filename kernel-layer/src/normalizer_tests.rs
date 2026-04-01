@@ -32,21 +32,22 @@ mod tests {
         event
     }
 
-    /// Verify that a FileOpenedEvent is correctly encoded as a
-    /// length-prefixed protobuf Event message.
-    #[test]
-    fn encode_produces_valid_protobuf() {
-        let event = make_event(1234, "/home/tim/file.txt");
+    /// Helper: encode an event the same way normalizer::encode_event does.
+    fn encode_test_event(event: &FileOpenedEvent, path: &str, session_id: &str) -> Vec<u8> {
+        let file_payload = proto::FileOpenedPayload {
+            path: path.to_string(),
+            app_id: format!("ebpf:{}", event.pid),
+            flags: 0,
+        };
 
-        // Replicate encode_event logic from normalizer
         let proto_event = proto::Event {
             id: uuid::Uuid::now_v7().to_string(),
             r#type: "file.opened".to_string(),
             timestamp: event.timestamp_ns as i64,
             source: "ebpf".to_string(),
             pid: event.pid,
-            session_id: "test-session".to_string(),
-            payload: b"/home/tim/file.txt".to_vec(),
+            session_id: session_id.to_string(),
+            payload: file_payload.encode_to_vec(),
         };
 
         let encoded = proto_event.encode_to_vec();
@@ -54,17 +55,47 @@ mod tests {
         let mut msg = Vec::with_capacity(4 + encoded.len());
         msg.extend_from_slice(&len.to_be_bytes());
         msg.extend_from_slice(&encoded);
+        msg
+    }
 
-        // Verify it can be decoded back
-        let decoded = proto::Event::decode(&encoded[..]).unwrap();
+    /// Verify that a FileOpenedEvent is correctly encoded as a
+    /// length-prefixed protobuf Event message with a typed payload.
+    #[test]
+    fn encode_produces_valid_protobuf() {
+        let event = make_event(1234, "/home/tim/file.txt");
+        let msg = encode_test_event(&event, "/home/tim/file.txt", "test-session");
+
+        // Verify length prefix
+        let prefix = u32::from_be_bytes(msg[..4].try_into().unwrap()) as usize;
+        let encoded = &msg[4..];
+        assert_eq!(prefix, encoded.len());
+
+        // Decode the envelope
+        let decoded = proto::Event::decode(encoded).unwrap();
         assert_eq!(decoded.r#type, "file.opened");
         assert_eq!(decoded.pid, 1234);
         assert_eq!(decoded.source, "ebpf");
-        assert_eq!(decoded.payload, b"/home/tim/file.txt");
 
-        // Verify length prefix is correct
-        let prefix = u32::from_be_bytes(msg[..4].try_into().unwrap()) as usize;
-        assert_eq!(prefix, encoded.len());
+        // Decode the typed payload
+        let payload = proto::FileOpenedPayload::decode(decoded.payload.as_slice()).unwrap();
+        assert_eq!(payload.path, "/home/tim/file.txt");
+        assert_eq!(payload.app_id, "ebpf:1234");
+        assert_eq!(payload.flags, 0);
+    }
+
+    /// Verify that the payload can be decoded by the same logic that
+    /// knowledge/src/promotion.rs uses.
+    #[test]
+    fn payload_decodes_as_file_opened_payload() {
+        let event = make_event(42, "/etc/hostname");
+        let msg = encode_test_event(&event, "/etc/hostname", "sess-1");
+
+        let encoded = &msg[4..];
+        let envelope = proto::Event::decode(encoded).unwrap();
+
+        let payload = proto::FileOpenedPayload::decode(envelope.payload.as_slice()).unwrap();
+        assert_eq!(payload.path, "/etc/hostname");
+        assert_eq!(payload.app_id, "ebpf:42");
     }
 
     /// Verify that blocked paths are correctly identified.
@@ -164,21 +195,8 @@ mod tests {
         std::thread::sleep(Duration::from_millis(50));
 
         // Simulate what the normalizer does: encode and send one event
-        let proto_event = proto::Event {
-            id: uuid::Uuid::now_v7().to_string(),
-            r#type: "file.opened".to_string(),
-            timestamp: 1_000_000,
-            source: "ebpf".to_string(),
-            pid: 42,
-            session_id: "test-session".to_string(),
-            payload: b"/home/tim/test.txt".to_vec(),
-        };
-
-        let encoded = proto_event.encode_to_vec();
-        let len = u32::try_from(encoded.len()).unwrap().to_be_bytes();
-        let mut msg = Vec::new();
-        msg.extend_from_slice(&len);
-        msg.extend_from_slice(&encoded);
+        let event = make_event(42, "/home/tim/test.txt");
+        let msg = encode_test_event(&event, "/home/tim/test.txt", "test-session");
 
         use std::os::unix::net::UnixStream;
         use std::io::Write;
@@ -192,6 +210,10 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].r#type, "file.opened");
         assert_eq!(events[0].pid, 42);
-        assert_eq!(events[0].payload, b"/home/tim/test.txt");
+
+        // Verify the payload is a valid FileOpenedPayload
+        let payload = proto::FileOpenedPayload::decode(events[0].payload.as_slice()).unwrap();
+        assert_eq!(payload.path, "/home/tim/test.txt");
+        assert_eq!(payload.app_id, "ebpf:42");
     }
 }
