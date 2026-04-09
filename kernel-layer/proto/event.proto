@@ -13,6 +13,8 @@ message Event {
   uint32 pid        = 5;  // originating process ID
   string session_id = 6;  // user session reference
   bytes  payload    = 7;  // type-specific protobuf message, encoded
+  uint32 uid        = 8;  // originating user ID (0 = system event, delivered to all)
+  string project_id = 9;  // optional: project UUID for audit-log scoping
 }
 
 // Emitted when a file is opened by any process.

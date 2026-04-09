@@ -317,6 +317,8 @@ fn encode_envelope(
         pid,
         session_id: session_id.to_string(),
         payload,
+        uid: 0,
+        project_id: String::new(),
     };
 
     let encoded = proto_event.encode_to_vec();
